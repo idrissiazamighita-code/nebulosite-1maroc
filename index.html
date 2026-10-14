@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NÉBULOSITÉ MAROC — Prototype</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--navy:#082e53;--blue:#0867b2;--line:#c9dff3;--pale:#f2f8fd;--text:#143657}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--text);background:#eef5fb}
+header{height:auto;min-height:68px;background:linear-gradient(100deg,#082746,#124b7e);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 20px;flex-wrap:wrap}
+.brand{font-size:21px;font-weight:800;letter-spacing:.5px}.sub{font-size:12px;opacity:.85;margin-top:4px}
+.top-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.top-controls select,.top-controls input{background:#fff;color:#173957;border:1px solid #c6def4;border-radius:7px;padding:9px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px;padding:12px;max-width:1800px;margin:auto}
+.left{min-width:0}.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.tab{border:1px solid var(--line);background:white;border-radius:9px;padding:12px 8px;text-align:left;color:var(--text);cursor:pointer;font-weight:700}
+.tab small{display:block;font-weight:400;color:#496b8a;margin-top:5px}.tab.active{background:#0b3b66;color:#fff;border-color:#0b3b66}.tab.active small{color:#d7eaff}
+#map{height:min(67vh,740px);min-height:440px;border:1px solid #b8d5ee;border-radius:10px;overflow:hidden;background:#d9ebf8}
+.thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:9px}.thumb{border:1px solid var(--line);background:white;border-radius:8px;padding:10px;cursor:pointer;font-size:13px}.thumb.active{outline:2px solid #0875d1}.thumb strong{display:block;margin-bottom:5px}.thumb span{color:#55728b;font-size:11px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}.panel h3{font-size:14px;margin:0 0 10px;color:#0a3a67}.symbols{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.sym{border:1px solid #d3e4f3;border-radius:7px;background:#fbfdff;padding:9px 3px;cursor:pointer;color:#173b5d;font-size:11px;min-height:62px}.sym .emoji{display:block;font-size:24px;margin-bottom:4px}.sym.selected{background:#e4f2ff;border:2px solid #0875d1;padding:8px 2px}
+.tools{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.tools button,.actions button{border:1px solid #bdd8ef;background:#f8fbff;border-radius:7px;padding:9px 5px;color:#0b4e86;cursor:pointer}.tools button.selected{background:#dceeff;border-color:#0875d1}
+label{display:block;font-size:12px;font-weight:700;margin:8px 0 4px}input[type=date],select,textarea{width:100%;padding:9px;border:1px solid #c7dced;border-radius:6px;background:white;color:#173957}textarea{resize:vertical;min-height:65px}.hint{font-size:11px;line-height:1.45;color:#58728a;margin-top:8px}.actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}.actions .primary{background:#0867b2;color:#fff;border-color:#0867b2}.status{font-size:12px;color:#476781;margin:8px 0}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:#466580;margin-top:8px}.legend span{white-space:nowrap}
+footer{padding:8px 14px 16px;color:#59758e;font-size:11px;text-align:center}
+@media(max-width:1000px){main{grid-template-columns:1fr}.panel-column{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.panel{margin:0}.tabs{grid-template-columns:repeat(2,1fr)}#map{height:60vh}.thumbs{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){header{align-items:flex-start}.brand{font-size:17px}.panel-column{display:block}.panel{margin-bottom:10px}#map{min-height:400px;height:55vh}.top-controls{width:100%}.top-controls>*{flex:1;min-width:120px}}
+</style>
+</head>
+<body>
+<header>
+  <div><div class="brand">☀ NÉBULOSITÉ MAROC</div><div class="sub">Outil d'aide à la prévision météorologique · prototype manuel</div></div>
+  <div class="top-controls">
+    <label style="color:white;margin:0">Date <input id="forecastDate" type="date" value="2026-10-14"></label>
+    <select id="model" aria-label="Modèle"><option>Analyse du prévisionniste</option><option>ECMWF</option><option>GFS</option><option>Modèle local</option></select>
+  </div>
+</header>
+<main>
+<section class="left">
+  <div class="tabs" id="tabs"></div>
+  <div id="map" aria-label="Carte interactive du Maroc"></div>
+  <div class="legend"><span>━ Limites administratives</span><span>☀ Temps sensible</span><span>● Villes principales</span><span>Cliquer sur la carte pour placer le symbole sélectionné</span></div>
+  <div class="thumbs" id="thumbs"></div>
+</section>
+<aside class="panel-column">
+  <section class="panel"><h3>Symboles de temps sensible</h3><div class="symbols" id="symbols"></div><div class="hint">Choisissez un symbole puis cliquez sur la carte pour le placer. Les symboles sont propres à chaque échéance.</div></section>
+  <section class="panel"><h3>Outils de carte</h3><div class="tools"><button id="selectTool" class="selected">↖ Sélection</button><button id="zoneTool">◌ Zone nuageuse</button><button id="deleteTool">⌫ Effacer</button></div><div class="hint">Sélection : déplacer les symboles en les faisant glisser. Effacer : cliquez sur un symbole pour le supprimer. Les zones nuageuses sont disponibles dans la version de démonstration sous forme d'annotation.</div></section>
+  <section class="panel"><h3>Informations de prévision</h3>
+    <label for="validity">Heure de validité</label><select id="validity"><option>12 UTC</option><option>18 UTC</option><option>00 UTC</option><option>06 UTC</option></select>
+    <label for="comment">Commentaire synoptique</label><textarea id="comment" maxlength="500" placeholder="Situation générale, évolution attendue…"></textarea>
+    <div class="status" id="status">Chargement de la carte administrative…</div>
+    <div class="actions"><button id="save">Enregistrer JSON</button><button class="primary" id="export">Imprimer / PDF</button></div>
+  </section>
+  <section class="panel"><h3>Affichage</h3><label><input type="checkbox" id="showCities" checked> Afficher les villes principales</label><label><input type="checkbox" id="showBoundaries" checked> Afficher les limites provinciales</label><div class="hint">Les limites et noms détaillés dépendent de la disponibilité des données administratives en ligne. Vérifiez les géométries avant un usage opérationnel.</div></section>
+</aside>
+</main>
+<footer>Prototype d'interface — les symboles sont saisis manuellement. Les données météorologiques ne sont pas connectées.</footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const periods=[
+ {name:"Après-midi",dateOffset:0,time:"12 UTC",icon:"☀"},
+ {name:"Nuit",dateOffset:0,time:"00 UTC",icon:"☾"},
+ {name:"Demain matin",dateOffset:1,time:"06 UTC",icon:"🌤"},
+ {name:"Demain après-midi",dateOffset:1,time:"12 UTC",icon:"☀"}
+];
+const weather=[["☀️","Soleil"],["🌤️","Peu nuageux"],["☁️","Nuageux"],["🌥️","Couvert"],["🌧️","Pluie"],["🌦️","Averses"],["⛈️","Orage"],["❄️","Neige"],["🌫️","Brouillard"],["💨","Vent"],["🌬️","Poussière"]];
+let activePeriod=0, selectedWeather=weather[0], mode="select", markers=[[],[],[],[]], provinceLayer=null, cityLayer=null, zoneNotes=[[],[],[],[]];
+const map=L.map('map',{zoomControl:false}).setView([31.8,-6.2],5.2);
+L.control.zoom({position:'topleft'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:12,attribution:'© OpenStreetMap'}).addTo(map);
+const cityData=[
+["Tanger",35.76,-5.83],["Tétouan",35.57,-5.37],["Al Hoceïma",35.25,-3.93],["Nador",35.17,-2.93],
+["Oujda",34.68,-1.91],["Fès",34.03,-5.00],["Meknès",33.89,-5.55],["Rabat",34.02,-6.84],
+["Kénitra",34.26,-6.58],["Casablanca",33.57,-7.59],["Settat",33.00,-7.62],["El Jadida",33.25,-8.50],
+["Safi",32.30,-9.24],["Marrakech",31.63,-8.00],["Béni Mellal",32.34,-6.35],["Errachidia",31.93,-4.42],
+["Ouarzazate",30.92,-6.91],["Agadir",30.43,-9.60],["Tiznit",29.70,-9.73],["Laâyoune",27.15,-13.20],["Dakhla",23.70,-15.95]
+];
+let cityMarkers=[]; let zoneLayers=[[],[],[],[]];
+function renderCities(){
+ cityMarkers.forEach(m=>map.removeLayer(m));cityMarkers=[];
+ if(!document.getElementById('showCities').checked)return;
+ const major = new Set(['Tanger','Oujda','Fès','Meknès','Rabat','Casablanca','Marrakech','Agadir','Errachidia','Laâyoune','Dakhla']);
+ cityData.forEach(([name,lat,lon])=>{
+  const m=L.circleMarker([lat,lon],{radius:3,color:'#fff',weight:1,fillColor:'#123d5c',fillOpacity:1,interactive:false});
+  m.bindTooltip(name,{permanent:true,direction:'right',offset:[4,0],className:'city-label'});
+  m._cityName=name; m._isMajor=major.has(name); cityMarkers.push(m);
+ });
+ updateCityVisibility();
+}
+function updateCityVisibility(){
+ const zoom=map.getZoom();
+ cityMarkers.forEach(m=>{
+  const visible=zoom>=6.3 || m._isMajor;
+  if(visible && !map.hasLayer(m))m.addTo(map);
+  if(!visible && map.hasLayer(m))map.removeLayer(m);
+ });
+}
+const style=document.createElement('style');style.textContent='.city-label{background:rgba(255,255,255,.82);border:0;box-shadow:none;color:#15344e;font-size:10px;font-weight:700;padding:1px 3px}.leaflet-tooltip.city-label{white-space:nowrap}.weather-marker{background:transparent;border:0}@media print{header,aside,.tabs,.thumbs,footer,.leaflet-control-container{display:none!important}main{display:block;padding:0}#map{height:175mm!important;min-height:175mm!important;border:0}.left{width:100%}.legend{font-size:9pt}}';document.head.appendChild(style);
+function iconHTML(emoji){return L.divIcon({className:'weather-marker',html:`<div style="font-size:27px;text-shadow:0 1px 3px white,0 0 4px white;cursor:grab">${emoji}</div>`,iconSize:[32,32],iconAnchor:[16,16]})}
+function addMarker(latlng,kind=selectedWeather,period=activePeriod){
+ const marker=L.marker(latlng,{icon:iconHTML(kind[0]),draggable:mode==='select'}).addTo(map);
+ marker._weatherKind=kind;marker._period=period;
+ marker.on('click',e=>{if(mode==='delete'){map.removeLayer(marker);markers[period]=markers[period].filter(x=>x!==marker);refreshThumbs();}});
+ marker.on('dragend',refreshThumbs);
+ markers[period].push(marker);refreshThumbs();return marker;
+}
+function renderTabs(){
+ const el=document.getElementById('tabs');el.innerHTML='';
+ periods.forEach((p,i)=>{const b=document.createElement('button');b.className='tab'+(i===activePeriod?' active':'');b.innerHTML=`${p.icon} ${p.name}<small>${p.dateOffset?'J+1':'Aujourd’hui'} · ${p.time}</small>`;b.onclick=()=>switchPeriod(i);el.appendChild(b)});
+}
+function renderWeather(){
+ const el=document.getElementById('symbols');el.innerHTML='';
+ weather.forEach(w=>{const b=document.createElement('button');b.className='sym'+(selectedWeather===w?' selected':'');b.innerHTML=`<span class="emoji">${w[0]}</span>${w[1]}`;b.onclick=()=>{selectedWeather=w;mode='place';renderWeather();setToolButtons()};el.appendChild(b)});
+}
+function setToolButtons(){
+ document.getElementById('selectTool').classList.toggle('selected',mode==='select');
+ document.getElementById('zoneTool').classList.toggle('selected',mode==='zone');
+ document.getElementById('deleteTool').classList.toggle('selected',mode==='delete');
+ markers.flat().forEach(m=>m.dragging && (mode==='select'?m.dragging.enable():m.dragging.disable()));
+}
+function switchPeriod(i){
+ periods[activePeriod].comment=document.getElementById('comment').value;
+ periods[activePeriod].time=document.getElementById('validity').value;
+ activePeriod=i;renderTabs();markers.flat().forEach(m=>{if(map.hasLayer(m))map.removeLayer(m)});zoneLayers.flat().forEach(z=>{if(map.hasLayer(z))map.removeLayer(z)});
+ markers[i].forEach(m=>{m.addTo(map);if(m.dragging)(mode==='select'?m.dragging.enable():m.dragging.disable())});zoneLayers[i].forEach(z=>z.addTo(map));
+ document.getElementById('comment').value=periods[i].comment||'';
+ document.getElementById('validity').value=periods[i].time;refreshThumbs();
+}
+map.on('click',e=>{
+ if(mode==='delete')return;
+ if(mode==='zone'){
+  const note=prompt('Annotation de zone (ex. nuages bas, averses, brume) :');if(note){const c=L.circle(e.latlng,{radius:45000,color:'#167bc0',fillColor:'#69b9ed',fillOpacity:.25,weight:2}).addTo(map);c.bindTooltip(note);zoneLayers[activePeriod].push(c);zoneNotes[activePeriod].push({lat:e.latlng.lat,lon:e.latlng.lng,note});refreshThumbs()}return;
+ }
+ addMarker(e.latlng);
+});
+document.getElementById('selectTool').onclick=()=>{mode='select';setToolButtons()};
+document.getElementById('zoneTool').onclick=()=>{mode='zone';setToolButtons()};
+document.getElementById('deleteTool').onclick=()=>{mode='delete';setToolButtons()};
+document.getElementById('showCities').onchange=renderCities;
+document.getElementById('showBoundaries').onchange=()=>{if(provinceLayer){if(document.getElementById('showBoundaries').checked)provinceLayer.addTo(map);else map.removeLayer(provinceLayer)}};
+document.getElementById('validity').onchange=e=>{periods[activePeriod].time=e.target.value;renderTabs()};
+document.getElementById('comment').oninput=e=>periods[activePeriod].comment=e.target.value;
+function refreshThumbs(){
+ const el=document.getElementById('thumbs');el.innerHTML='';
+ periods.forEach((p,i)=>{const b=document.createElement('button');b.className='thumb'+(i===activePeriod?' active':'');b.innerHTML=`<strong>${p.icon} ${p.name}</strong><span>${markers[i].length} symbole(s) · ${zoneNotes[i].length} zone(s)</span>`;b.onclick=()=>switchPeriod(i);el.appendChild(b)});
+ document.getElementById('status').textContent=`${periods[activePeriod].name} : ${markers[activePeriod].length} symbole(s) placé(s)`;
+}
+function saveJSON(){
+ const data={title:'NÉBULOSITÉ MAROC',date:document.getElementById('forecastDate').value,model:document.getElementById('model').value,periods:periods.map((p,i)=>({name:p.name,time:p.time,comment:p.comment||'',symbols:markers[i].map(m=>({type:m._weatherKind[1],icon:m._weatherKind[0],lat:m.getLatLng().lat,lon:m.getLatLng().lng})),zones:zoneNotes[i]}))};
+ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='nebulosite-maroc.json';a.click();URL.revokeObjectURL(url);
+}
+document.getElementById('save').onclick=saveJSON;
+document.getElementById('export').onclick=()=>window.print();
+async function loadBoundaries(){
+ const status=document.getElementById('status');
+ try{
+  const res=await fetch('https://www.geoboundaries.org/api/current/gbOpen/MAR/ADM2/');
+  if(!res.ok)throw new Error('Service indisponible');
+  const meta=await res.json();const geo=await fetch(meta.gjDownloadURL);if(!geo.ok)throw new Error('GeoJSON indisponible');
+  const gj=await geo.json();
+  provinceLayer=L.geoJSON(gj,{style:{color:'#415c46',weight:.65,opacity:.9,fillOpacity:0},onEachFeature:(f,l)=>{const p=f.properties||{};const name=p.shapeName||p.shapeName_en||p.name||p.NAME_2;if(name)l.bindTooltip(name,{sticky:true})}});
+  if(document.getElementById('showBoundaries').checked)provinceLayer.addTo(map);
+  status.textContent='Limites provinciales chargées. Vérifiez la nomenclature et la couverture administrative.';
+ }catch(e){status.textContent='Carte de fond disponible ; limites provinciales détaillées non chargées. Vérifiez votre connexion ou importez un GeoJSON administratif validé.'}
+}
+renderTabs();renderWeather();renderCities();refreshThumbs();loadBoundaries();
+map.on('zoomend',updateCityVisibility);
+window.addEventListener('resize',()=>map.invalidateSize());
+</script>
+</body>
+</html>
